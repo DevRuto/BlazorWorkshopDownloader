@@ -1,0 +1,87 @@
+﻿@page "/"
+@using BlazorWorkshopDownloader.Shared
+@using System.Net;
+@inject HttpClient Http
+
+<h1>Steam Workshop Download</h1>
+
+<form onsubmit="event.preventDefault();">
+    <div class="form-group">
+        <label for="wsid">Workshop IDS</label>
+        <textarea class="form-control" id="wsid" @bind="WorkshopText"></textarea>
+    </div>
+    <button type="submit" class="btn btn-primary" @onclick="GetWorkshopDetails">Submit</button>
+</form>
+
+<table class="table mt-6">
+    <thead>
+        <tr>
+            <th scope="col">ID</th>
+            <th scope="col">Name</th>
+            <th scope="col">Download</th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (WorkshopDetails != null)
+        {
+            @foreach (var detail in WorkshopDetails)
+            {
+            <tr>
+                <td>@detail.publishedfileid</td>
+                <td>@detail.filename</td>
+                @if (detail.result == 9)
+                {
+                    <td><a class="btn" href="#">Not Found</a></td>
+                }
+                else
+                {
+                    <td><a class="btn btn-link" href="@GenerateLink(detail)" download>Download</a></td>
+                }
+            </tr>
+            }
+        }
+    </tbody>
+</table>
+
+@code {
+    public SteamResponse.Publishedfiledetail[] WorkshopDetails;
+    private string? WorkshopText { get; set; }
+
+    private async Task GetWorkshopDetails()
+    {
+        var query = "";
+        var ids = ParseIds();
+        foreach (var id in ids)
+        {
+            query += $"workshopIds={id}&";
+        }
+        WorkshopDetails = await Http.GetFromJsonAsync<SteamResponse.Publishedfiledetail[]>($"api/steam/details?{query.TrimEnd('&')}");
+    }
+
+    private const string STEAM_WORKSHOP_LINK = "https://steamcommunity.com/sharedfiles/filedetails/?id=";
+    private int[] ParseIds()
+    {
+        var list = new List<int>();
+        var lines = WorkshopText.Trim()
+                .Split(new string[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+        foreach (var line in lines)
+        {
+            var tline = line.Trim();
+            int id;
+            if (tline.StartsWith(STEAM_WORKSHOP_LINK))
+                int.TryParse(tline.Substring(STEAM_WORKSHOP_LINK.Length), out id);
+            else
+                int.TryParse(tline, out id);
+            if (id > -1)
+            {
+                list.Add(id);
+            }
+        }
+        return list.ToArray();
+    }
+
+    private string GenerateLink(SteamResponse.Publishedfiledetail detail)
+    {
+        return $"/api/steam/proxy?steamurl={WebUtility.UrlEncode(detail.file_url)}&filename={WebUtility.UrlEncode(detail.filename)}";
+    }
+}
